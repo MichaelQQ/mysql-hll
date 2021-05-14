@@ -347,7 +347,7 @@ long long HLL_GROUP_COUNT(UDF_INIT *initid, UDF_ARGS *args, char *is_null, char 
 }
 
 my_bool HLL_GROUP_MERGE_init(UDF_INIT *initid, UDF_ARGS *args, char *message) {
-	return HLL_GROUP_MERGE_init(initid, args, message);
+	return HLL_GROUP_COUNT_init(initid, args, message);
 }
 
 void HLL_GROUP_MERGE_deinit(UDF_INIT *initid) {
