@@ -537,3 +537,86 @@ long long HLL_COUNT_DISTINCT(UDF_INIT *initid, UDF_ARGS *args, char *is_null, ch
 
 	return (long long)hll_count(hll);
 }
+
+long long _intersection_hlls(struct HLL *hll_arr, unsigned int length) {
+	struct HLL hll_arr_sub[length - 1];
+	struct HLL hll_arr_sub2[length - 1];
+	long long result;
+	int i;
+
+	if (length <= 0) {
+		return 0;
+	}
+
+	memcpy(hll_arr_sub, &hll_arr[1], (length - 1)*sizeof(hll_arr[0]));
+	memcpy(hll_arr_sub2, &hll_arr[1], (length - 1)*sizeof(hll_arr[0]));
+
+	for (i = 1; i < length; i++) {
+		hll_load(&hll_arr_sub[i-1], hll_arr[i].registers, hll_arr[i].size);
+		hll_load(&hll_arr_sub2[i-1], hll_arr[i].registers, hll_arr[i].size);
+		if(hll_merge(&hll_arr_sub[i-1], &hll_arr[0]) != 0) {
+			return -1;
+		}
+	}
+
+	result = (long long)hll_count(&hll_arr[0]) + _intersection_hlls(hll_arr_sub2, length-1) - _intersection_hlls(hll_arr_sub, length-1);
+
+	for (i = 0; i < length-1; i++) {
+		hll_destroy(&hll_arr_sub[i]);
+		hll_destroy(&hll_arr_sub2[i]);
+	}
+
+	if (result < 0) {
+		return 0;
+	} else {
+		return result;
+	}
+}
+
+my_bool HLL_INTERSECTION_init(UDF_INIT *initid, UDF_ARGS *args, char *message) {
+	if(args->arg_count < 2) {
+		strcpy(message, "This function takes at least 2 arguments");
+		return 1;
+	}
+
+	args->arg_type[0] = STRING_RESULT;
+	args->arg_type[1] = STRING_RESULT;
+	initid->maybe_null = 1;
+	initid->ptr = NULL;
+
+	return 0;
+}
+
+void HLL_INTERSECTION_deinit(UDF_INIT *initid) {
+	if(initid->ptr) {
+		free(initid->ptr);
+	}
+}
+
+long long HLL_INTERSECTION(UDF_INIT *initid, UDF_ARGS *args, char *is_null, char *error)
+{
+	struct HLL hll_arr[args->arg_count];
+	long long result = 0;
+	int i;
+
+	if(!args->args[0]) {
+		*error = 1;
+		return -1;
+	}
+
+	for(i = 0; i < args->arg_count; i++) {
+		if(hll_load(&hll_arr[i], args->args[i], args->lengths[i]) != 0) {
+			free(hll);
+			*error = 1;
+			return -1;
+		}
+	}
+
+	result = _intersection_hlls(hll_arr, args->arg_count);
+
+	for (i = 0; i < args->arg_count; i++) {
+		hll_destroy(&hll_arr[i]);
+	}
+
+	return result;
+}
